@@ -71,6 +71,35 @@ constexpr ops ops_for{
     .move_assign_func = &call_typed_func<T, move_assigner<T>>,
     .destruct_func = &destruct_func<T>,
 };
+using ops_ptr = const ops*;
+
+// moving objects using ops
+static void move_construct(void* dst_buf, ops_ptr& dst_ops,
+                           void* src_buf, ops_ptr& src_ops) {
+    if (!src_ops && !dst_ops) {
+        // both object are nullptr_t, do nothing
+        return;
+    } else if (src_ops == dst_ops) {
+        // objects have the same type, make move
+        (*src_ops->move_assign_func)(dst_buf, src_buf);
+        (*src_ops->destruct_func)(src_buf);
+        src_ops = nullptr;
+    } else {
+        // objects have different type
+        // delete the old object
+        if (dst_ops) {
+            (*dst_ops->destruct_func)(dst_buf);
+            dst_ops = nullptr;
+        }
+        // construct the new object
+        if (src_ops) {
+            (*src_ops->move_construct_func)(dst_buf, src_buf);
+            (*src_ops->destruct_func)(src_buf);
+        }
+        dst_ops = src_ops;
+        src_ops = nullptr;
+    }
+}
 
 } // namespace _
 
@@ -93,8 +122,7 @@ private:
     // Struct for calling object's operators
     // equals to `nullptr` when `buf_` contains no object
     // equals to `ops_for<T>` when `buf_` contains a `T` object
-    using ops_ptr = const _::ops*;
-    ops_ptr ops_;
+    _::ops_ptr ops_;
 
     // Storage for underlying `T` object
     // this is mutable so that `operator*` and `get()` can
@@ -105,33 +133,6 @@ private:
     struct derived_class_check {
         static constexpr bool ok = sizeof(Derived) <= buffer_size && std::is_base_of_v<Base, Derived>;
     };
-
-    static void move_construct(void* dst_buf, ops_ptr& dst_ops,
-                               void* src_buf, ops_ptr& src_ops) {
-        if (!src_ops && !dst_ops) {
-            // both object are nullptr_t, do nothing
-            return;
-        } else if (src_ops == dst_ops) {
-            // objects have the same type, make move
-            (*src_ops->move_assign_func)(dst_buf, src_buf);
-            (*src_ops->destruct_func)(src_buf);
-            src_ops = nullptr;
-        } else {
-            // objects have different type
-            // delete the old object
-            if (dst_ops) {
-                (*dst_ops->destruct_func)(dst_buf);
-                dst_ops = nullptr;
-            }
-            // construct the new object
-            if (src_ops) {
-                (*src_ops->move_construct_func)(dst_buf, src_buf);
-                (*src_ops->destruct_func)(src_buf);
-            }
-            dst_ops = src_ops;
-            src_ops = nullptr;
-        }
-    }
 
 public:
     // operators, ctors, dtor
@@ -148,14 +149,14 @@ public:
         requires(derived_class_check<Derived>::ok)
         : ops_{nullptr}
     {
-        move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
+        _::move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
     }
 
     template<typename Derived = Base>
     static_ptr& operator=(static_ptr<Derived>&& rhs)
         requires(derived_class_check<Derived>::ok)
     {
-        move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
+        _::move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
         return *this;
     }
 
