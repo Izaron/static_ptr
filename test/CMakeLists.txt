@@ -10,7 +10,10 @@ enable_testing()
 
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
-set(tests test_derived)
+set(tests
+    test_buffer_size
+    test_derived
+)
 
 include(GoogleTest)
 

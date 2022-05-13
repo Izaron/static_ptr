@@ -77,10 +77,11 @@ constexpr ops ops_for{
 // static_ptr traits struct
 template<typename T>
 struct static_ptr_traits {
-    static constexpr std::size_t buffer_size = 16;
+    static constexpr std::size_t buffer_size = std::max(static_cast<std::size_t>(16), sizeof(T));
 };
 
 template<typename Base>
+requires(!std::is_void_v<Base>)
 class static_ptr {
 private:
     static constexpr std::size_t buffer_size = static_ptr_traits<Base>::buffer_size;
@@ -101,12 +102,9 @@ private:
     mutable std::aligned_storage_t<buffer_size, align> buf_;
 
     template<typename Derived>
-    static consteval void static_check_derived_class() {
-        static_assert(sizeof(Derived) <= buffer_size,
-                      "Size of type is larger than static_ptr buffer size");
-        static_assert(std::is_base_of_v<Base, Derived>,
-                      "Initializing with incompatible type");
-    }
+    struct derived_class_check {
+        static constexpr bool ok = sizeof(Derived) <= buffer_size && std::is_base_of_v<Base, Derived>;
+    };
 
     static void move_construct(void* dst_buf, ops_ptr& dst_ops,
                                void* src_buf, ops_ptr& src_ops) {
@@ -146,13 +144,17 @@ public:
     }
 
     template<typename Derived = Base>
-    static_ptr(static_ptr<Derived>&& rhs) : ops_{nullptr} {
-        static_check_derived_class<Derived>();
+    static_ptr(static_ptr<Derived>&& rhs)
+        requires(derived_class_check<Derived>::ok)
+        : ops_{nullptr}
+    {
         move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
     }
+
     template<typename Derived = Base>
-    static_ptr& operator=(static_ptr<Derived>&& rhs) {
-        static_check_derived_class<Derived>();
+    static_ptr& operator=(static_ptr<Derived>&& rhs)
+        requires(derived_class_check<Derived>::ok)
+    {
         move_construct(&buf_, ops_, &rhs.buf_, rhs.ops_);
         return *this;
     }
@@ -166,8 +168,10 @@ public:
 
     // in-place (re)initialization
     template<typename Derived = Base, typename ...Args>
-    Derived& emplace(Args&&... args) noexcept(std::is_nothrow_constructible_v<Derived, Args...>) {
-        static_check_derived_class<Derived>();
+    Derived& emplace(Args&&... args)
+        noexcept(std::is_nothrow_constructible_v<Derived, Args...>)
+        requires(derived_class_check<Derived>::ok)
+    {
         reset();
         Derived* derived = new (&buf_) Derived(std::forward<Args>(args)...);
         ops_ = &_::ops_for<Derived>;
