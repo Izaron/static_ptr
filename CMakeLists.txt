@@ -12,3 +12,9 @@ if(WITH_TESTS)
     include_directories(include)
     add_subdirectory(test EXCLUDE_FROM_ALL)  # build only on 'make check'
 endif(WITH_TESTS)
+
+option(WITH_BENCHMARK "build benchmark" ON)
+if(WITH_BENCHMARK)
+    include_directories(benchmark)
+    add_subdirectory(benchmark EXCLUDE_FROM_ALL)  # build only on 'make bm'
+endif(WITH_BENCHMARK)
