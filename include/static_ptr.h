@@ -214,3 +214,18 @@ static static_ptr<T> make_static(Args&&... args) {
 }
 
 } // namespace sp
+
+#define STATIC_PTR_BUFFER_SIZE(Tp, size)                   \
+namespace sp {                                             \
+    template<> struct static_ptr_traits<Tp> {              \
+        static constexpr std::size_t buffer_size = size;   \
+    };                                                     \
+}
+
+#define STATIC_PTR_INHERITED_BUFFER_SIZE(Tp, size)         \
+namespace sp {                                             \
+    template<typename T> requires std::is_base_of_v<Tp, T> \
+    struct static_ptr_traits<T> {                          \
+        static constexpr std::size_t buffer_size = size;   \
+    };                                                     \
+}
