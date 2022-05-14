@@ -66,7 +66,7 @@ void destruct_func(void* dst) {
 }
 
 template<typename T>
-constexpr ops ops_for{
+static constexpr ops ops_for{
     .move_construct_func = &call_typed_func<T, move_constructer<T>>,
     .move_assign_func = &call_typed_func<T, move_assigner<T>>,
     .destruct_func = &destruct_func<T>,
